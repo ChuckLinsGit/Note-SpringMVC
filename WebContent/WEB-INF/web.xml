@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://java.sun.com/xml/ns/javaee" xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd" id="WebApp_ID" version="3.0">
+  <display-name>SpringMVC</display-name>
+  
+ <!-- —————————————————————————————————请求响应字符集过滤器———————————————————————————————————————— -->	 
+     <filter>
+     	<filter-name>characterEncodingFilter</filter-name>
+     	<filter-class >org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+     	<!-- encoding属性用于指定请求可选字符集，如果请求在经过过滤器之前设置了字符集且forceEncoding为false
+     		 则此处设置无效 -->
+     	<init-param>
+     		<param-name>encoding</param-name>
+     		<param-value>utf-8</param-value>
+     	</init-param>
+     	<!-- forceEncoding属性用于强制指定请求和响应的字符集 -->
+     	<init-param>
+     		<param-name>forceEncoding</param-name>
+     		<param-value>true</param-value>
+     	</init-param>
+     </filter>
+     
+     <filter-mapping>
+     	<filter-name>characterEncodingFilter</filter-name>
+     	<url-pattern>*.do</url-pattern>
+     </filter-mapping>
+     
+   
+<!-- —————————————————————————————————中央调度器———————————————————————————————————————————————— -->	  
+	<!-- 注册中央调度器 ：所有servlet请求都将通过中央调度器，并由中央调度器传递给指定的servelt-->
+	<servlet>
+		<servlet-name>myServletTest</servlet-name>
+		<servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+		<!-- myServlet会默认合成为myServlet-servlet.xml并默认放在/WEB-INF目录下，因此需要通过在servlet中
+			的init-param标签中指定contextConfigLocation路径以重新定向servlet.xml-->
+		<init-param>
+			<param-name>contextConfigLocation</param-name>
+	  	<!-- 	<param-value>classpath:springMVCcontext.xml</param-value> -->
+	  	<!-- <param-value>classpath:annotation/springMVCcontext.xml</param-value> -->
+	  		<param-value>classpath:coreTechnology/springMVCcontext.xml</param-value>
+		</init-param>
+		<!-- 在tomcat服务器启动的时候创建该中央调度器，因此在第一个请求来的时候不会因为需要创建该对象而响应慢 -->
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	
+	<servlet-mapping>
+		<servlet-name>myServletTest</servlet-name>
+		<!-- 
+			写成/*时表示所有动态请求都将通过中央调度器，但由于没有指定后缀，无法识别指向哪个servlet
+			写成/时表示所有静态请求(类似于src类的请求)都将被中央调度器拦截，因此没办法响应请求
+		 -->
+		<url-pattern>*.do</url-pattern>
+	</servlet-mapping>
+	
+	
+  
+<!-- —————————————————————————————————静态资源拦截解决方案————————————————————————————————————————— -->  
+  <!-- 使用restful格式请求(http://localhost:8080/application/deleteServlet/5，安卓可以使用)时，url匹配不
+  得不用'/',此时静态资源请求被拦截，无法得到响应。
+  解决方法：
+  1、借助tomcat专门用于静态资源请求的默认servlet(可在tomcat
+  目录下的web.xml查看，此servlet在应用自定义的servlet无法处理请求时发挥作用)，形式如下。
+  <servlet-mapping>
+  	<servlet-name>default</servlet-name>
+  	<url-pattern>*.png</url-pattern>
+  </servlet-mapping>
+  2、使用<mvc:default-servlet-handler/>标签，原理是在得到静态资源请求时，handlerMapper调用defaultServletHttprequest
+  对象，该对象使用tomcat的default-servlet来处理，见springMVC.xml。
+  3、在spring3.0.4之后添加了专门处理静态资源请求的处理器ResourceHttpRequestHandler，可通过标签<mvc:resource
+   location="",mapping=""/>来指定请求的资源路径，见springMVC.xml。
+   -->
+  
+    <welcome-file-list>
+    <!-- 不可加'/'，属于前端路径 -->
+    <welcome-file>welcome.jsp</welcome-file>
+  	</welcome-file-list>
+</web-app>
