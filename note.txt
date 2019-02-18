@@ -1,0 +1,239 @@
+在启动Tomcat过程中遇到了问题：Tomcat在Eclipse中正常启动，但在浏览器中用Http://localhost:8080/打开得到的时404
+解决过程：一开始时更改Server设置，设置将发布时将项目放置到到tomcat安装目录下的webapps目录中，而不是Ecliptic默认
+的workplace路径。但依旧未解决问题。接着考虑其他因素：端口被占用或者是jdk路径不对，分析这两个原因必须从cmd启动Tomcat
+，因为在Eclipse中启动有些错误不会提示。在cmd中启动时，出现了意外的情况：jre路径不对！！考虑到刚更换过jdk和jre，怀疑
+时环境变量不对，查看环境变量，发现jre的路径指向bin目录，怀疑应该于jdk不同，指向jre根目录即可，更换后果然成功
+收获：IDE开发很方便，但因为时顶层开发工具，有些错误可能不会提示，因此有时出现错误时应当从开发的底层分析原因
+
+在解决了上述问题后，再重启Tomcat后还是出现了同样的问题，因此彻底删除server，重新配置后成功
+
+另外在进入manage.html时需要在tomcat安装目录下的conf中的tomcat-user.xml中设置角色和权限，值得注意的是，tomcat6之后
+的角色不是一个manager，而是由四个：manager-gui,manager-script,manager-jmx,manager-status。
+
+但在重启tomcat之后，tomcat-user.xml的内容被还原了，查找资料知道:因为已经在设置角色和权限之前，server已经被创建
+因此，重启tomcat时，server会根据之前的tomcat-user.xml重写tomcat目需下的tomcat-user.xml，所以要么删除server，要么在
+server的tomcat-user.xml中更改
+
+
+服务器路径：
+路径总结：分两大类：加'/'('/resource')、不加'/'('resource')和类路径
+1、加'/'类('/resource')也分两种：
+	①该路径出现在后台代码(包括java代码块、配置文件等)中，为服务器(后台)路径，此时
+其路径名为服务器中应用根路径(即webroot目录下，形式为：http：//localhost：8080/application)，合并之后为：http：
+//localhost：8080/application/resource;
+	**特别的，response的sendRedirect("")中添加的路径不是服务器路径，而是浏览器路径，因为重定向相当于浏览器重新
+发起请求，而spring的ModelandView中的重定向却是服务器路径
+	②该路径出现在前端动态请求中(如超链接、表单、图片等),为浏览器(前台)路径，此时其路径名服务
+器根路径(形式为：http：//localhost：8080)，合并之后http：//localhost：8080/resource，此时若resource中未包含
+应用名则会出现404错误
+2、不加'/'('resource')类即代表其路径名为当前路径，如在application项目的index.jsp中一个不加'/'请求，其路径名为
+http：//localhost：8080/application/module/，合并之后为：http：//localhost：8080/application/module/
+resource;
+	**不加'/'('resource')类会出现的问题：当resource中包含模块名甚至项目名时，发出请求时会出现404项目，因为路径中模块名
+甚至项目名重复出现了http：//localhost：8080/application/application/test/test/resource.解决方法
+①转换成加'/',固定项目名称，又两种表示方法
+	I.直接加上项目名称，/application/test/resource
+	II.使用request.getContextpath()方法(得到路径名)，${pageContext.request.getContextpath()}/test
+	/resource
+②利用base标签固定当前的路径名，从而防止重复，代码如下：
+String path=request.getContextpath();
+String basePath=request.getScehme()+"://"+request.getServerName()+":"+request.getServerPort()+path+"/";
+<head>
+	<base href="<%=basePath%>">
+<head/>
+
+3、类路径：使用类路径指定资源时，指向的src/目录下
+
+4、Java中io类使用的路径时物理路径，因此在J2ee应用程序中使用到io时，应注意使用getServletContext().
+getRealPath("/imgs");来获得被虚拟机识别的绝对路径；另外使用到物理路径时最好通过Thread.currentThread().
+getContextClassLoader().getResource("")来得到当前的classpath的绝对路径的URI表示法。
+
+
+
+
+问题：在springMVC配置文件中，处理器对应的资源路径可以不加'/'？
+
+
+
+
+
+
+在使用ajax请求并接收从服务器返回处理器结果时，出现406错误，ajax.jsp代码如下
+		$.ajax({
+				url:"nstest/return.do",//ajax请求资源路径
+				//datatype:"json",传递Object类型的对象时需要指定数据类型为json，因为该种数据使用json为载体
+				//data:{},{name:"龙傲天",age:23},ajax请求携带参数
+				
+				success:function(data){//成功返回时
+				/* var json=eval("("+data+")");解析json对象，除去括号
+					alter(json); */
+					alert(data);
+				},
+				 error: function(XMLHttpRequest, textStatus, errorThrown) {
+                     alert(XMLHttpRequest.status);
+                     alert(XMLHttpRequest.readyState);
+                     alert(textStatus);
+                 },
+                 complete: function(XMLHttpRequest, textStatus) {
+                     this; // 调用本次AJAX请求时传递的options参数
+                 }
+			});
+		});
+	});
+	
+	后台代码如下
+		@RequestMapping(value="/return.do",produces="text/html;charset=utf-8")
+	@ResponseBody				//将返回的数据放进响应体
+	public Object handleReturn() 
+			throws Exception {
+		System.out.println("return Object");
+		//return 123.456;
+		//return "北京欢迎你";//需要在@RequestMapping标签中加上produces="text/html;charset=utf-8"解决乱
+		码
+		return new student("草泥马",12,new School("gdou"));
+	}
+	
+查询可知，406指服务器响应设置与浏览器接收设置不相兼容而造成的，而在SpringMVC中常见的主要原因有：
+	1、未使用jackson工具包导致数据未转换成json
+	2、web.xml中ServletMapping的uri匹配路径后缀设置为*.html，而spring会默认使用text/html方式封装数据导致与
+	json不匹配，换成其他后缀即可
+但并不存在以上问题，返回去看后台代码，发现produces="text/html;charset=utf-8"指定了响应类型为text/html，导致
+与json不相符合，因此去掉即可
+
+体会：在学习web时应该学会使用浏览器携带的开发者工具查看请求和响应响应信息
+
+此处补上请求头和响应头基本属性概念
+	Multipurpose Internet Mail Extensions (MIME) type：多用途网际邮件扩展名类型，主要有四种：text/***,
+imag/***,audio/***,video/***,application/***,分别对应文本、图片、声音、视频、字节数据
+	
+	Accept：请求头用来告知客户端可以处理的内容类型，这种内容类型用MIME类型来表示。借助内容协商机制, 服务器可以
+从诸多备选项中选择一项进行应用，并使用 Content-Type 应答头通知客户端它的选择。浏览器会基于请求的上下文来为这个
+请求头设置合适的值
+
+	Accept-Encoding：会将客户端能够理解的内容编码方式——通常是某种压缩算法——进行通知。通过内容协商
+的方式，服务端会选择一个客户端提议的方式，使用并在响应报文首部 Content-Encoding 中通知客户端该选择。即使客户端
+和服务器都支持相同的压缩算法，在 identity 指令可以被接受的情况下，服务器也可以选择对响应主体不进行压缩。导致这种
+情况出现的两种常见的情形是：
+ 	要发送的数据已经经过压缩，再次进行压缩不会导致被传输的数据量更小。一些图像格式的文件会存在这种情况；服务器超
+ 载，无法承受压缩需求导致的计算开销。通常，如果服务器使用超过80%的计算能力，微软建议不要压缩。只要 identity ——
+  表示不需要进行任何编码——没有被明确禁止使用（通过 identity;q=0 指令或是 *;q=0 而没有为 identity 明确指定权重值
+  ），则服务器禁止返回表示客户端错误的 406 Not Acceptable 响应。
+  
+  	Accept-Language：请求头允许客户端声明它可以理解的自然语言，以及优先选择的区域方言。
+  	
+  	Cache-Control：通用消息头被用于在http 请求和响应中通过指定指令来实现缓存机制。缓存指令是单向的, 这意味着
+  在请求设置的指令，在响应中不一定包含相同的指令
+  	
+  	Content-Type：实体头部用于指示资源的MIME类型 media type 。在响应中，Content-Type标头告诉客户端实际返回
+  的内容的内容类型。浏览器会在某些情况下进行MIME查找，并不一定遵循此标题的值; 为了防止这种行为，可以将标题 X
+ -Content-Type-Options 设置为 nosniff。在请求中 (如POST 或 PUT)，客户端告诉服务器实际发送的数据类型。
+	
+	
+	
+	
+	
+	
+	
+在重新创建处理器以验证请求转发和重定向的时候，利用之前验证返回处理的配置文件，内容如下：
+	web.xml
+	<servlet>
+		<servlet-name>myServletTest</servlet-name>
+		<servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+		<!-- myServlet会默认合成为myServlet-servlet.xml并默认放在/WEB-INF目录下，因此需要通过在servlet中
+			的init-param标签中指定contextConfigLocation路径以重新定向servlet.xml-->
+		<init-param>
+			<param-name>contextConfigLocation</param-name>
+	  	<!-- 	<param-value>classpath:springMVCcontext.xml</param-value> -->
+	  	<param-value>classpath:annotation/springMVCcontext.xml</param-value>
+		</init-param>
+		<!-- 在tomcat服务器启动的时候创建该中央调度器，因此在第一个请求来的时候不会因为需要创建该对象而响应慢 -->
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+	
+	<servlet-mapping>
+		<servlet-name>myServletTest</servlet-name>
+		<!-- 
+			写成/*时表示所有动态请求都将通过中央调度器，但由于没有指定后缀，无法识别指向哪个servlet
+			写成/时表示所有静态请求(类似于src类的请求)都将被中央调度器拦截，因此没办法响应请求
+		 -->
+		<url-pattern>*.do</url-pattern>
+	</servlet-mapping>	
+	
+	springMVCcontext.xml
+		
+	<!-- 组件扫描器：必须指定组件类所在包 -->
+	<context:component-scan base-package="coreTechnology.handler"></context:component-scan>
+	
+	<!-- 注册MVC注解驱动 -->
+	<mvc:annotation-driven/>
+	
+	<bean class ="org.springframework.web.servlet.view.XmlViewResolver">
+		<property name="location" value="classpath:/coreTechnology/myViews.xml"/>
+		<property name="order" value="3"/>
+	</bean>
+
+	controller.class
+	
+		/**
+	 * 返回modelandview
+	 * @param arg0
+	 * @param arg1
+	 * @return
+	 * @throws Exception
+	 */
+	@RequestMapping("for.do")
+	public ModelAndView handleReturn(String name, int age) 
+			throws Exception {
+		ModelAndView mv=new ModelAndView();
+		mv.addObject("name", "chuck");
+		mv.addObject("age", 23);
+		mv.setViewName("forward:/welcome.jsp");
+		return mv;
+	}
+	然后开始验证时遇到问题一：无法找到for.do资源，后查找web.xml发现未将springMVCcontext.xml路径更改为当前项目
+的路径，修改后问题解决，但出现了问题二：无法解析视图名"forward:/welcome.jsp"，为节省时间，通过查询知道了可能原因
+是资源名称拼写不正确，但检查后没有问题，接着百般查询一无所获，因此决定自己debug.debug到这一部分时，发现了问题
+		View view;
+		if (mv.isReference()) {
+			// We need to resolve the view name.
+			view = resolveViewName(mv.getViewName(), mv.getModelInternal(), locale, request);
+			if (view == null) {
+				throw new ServletException("Could not resolve view with name '" + mv.getViewName() +
+						"' in servlet with name '" + getServletName() + "'");
+			}
+		}
+问题竟然是view为null，不解，跟进resolveViewName()方法	
+/**
+	 * Resolve the given view name into a View object (to be rendered).
+	 * <p>The default implementations asks all ViewResolvers of this dispatcher.
+	 * Can be overridden for custom resolution strategies, potentially based on
+	 * specific model attributes or request parameters.
+	 * @param viewName the name of the view to resolve
+	 * @param model the model to be passed to the view
+	 * @param locale the current locale
+	 * @param request current HTTP servlet request
+	 * @return the View object, or {@code null} if none found
+	 * @throws Exception if the view cannot be resolved
+	 * (typically in case of problems creating an actual View object)
+	 * @see ViewResolver#resolveViewName
+	 */
+	protected View resolveViewName(String viewName, Map<String, Object> model, Locale locale,
+			HttpServletRequest request) throws Exception {
+
+		for (ViewResolver viewResolver : this.viewResolvers) {
+			View view = viewResolver.resolveViewName(viewName, locale);
+			if (view != null) {
+				return view;
+			}
+		}
+		return null;
+	}
+终于有了发现，原来viewResolvers列表只有一个XmlviewResolvers，没有使用默认的viewResolvers，联想到viewResolvers
+的优先级，查看springMVCcontext.xml发现果真注册了一个XmlviewResolvers导致默认的viewResolvers未被调用，去掉之后
+问题解决了
+
+体会：果然问题实在无法解决还是要自己仔细debug才能找到问题，欲速则不达。
+
+
+在后台打印过程中，使用了"file"+i+1+"Message"形式的字符拼接，结果出现的是file01Message形式，这才回想到，字符
+与基本类型数据拼接时，会从左到右依次拼接，因此i+1直接被拼接进去，所以需要加上括号提高运算优先级
